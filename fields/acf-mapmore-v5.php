@@ -341,11 +341,11 @@ class acf_field_mapmore extends acf_field {
 	*/
 	
 	function input_admin_enqueue_scripts() {
-		
+		$google_maps_api_key = 'AIzaSyADY5VHjqxdLKtQ7B6iKf9Em59C617UHvQ';
 		$dir = str_replace( 'fields/', '', plugin_dir_url( __FILE__ ) );
 	 	
 		// register & inlcude Google maps
-		wp_register_script( 'googlemaps-api', '//maps.googleapis.com/maps/api/js?v=3&sensor=false&libraries=drawing', array(), '3', false );
+		wp_register_script( 'googlemaps-api', '//maps.googleapis.com/maps/api/js?key=AIzaSyADY5VHjqxdLKtQ7B6iKf9Em59C617UHvQ&v=3&libraries=drawing', array(), '3', false );
 		wp_enqueue_script('googlemaps-api');
 
 
