@@ -272,10 +272,8 @@
 						break;
 
 						case google.maps.drawing.OverlayType.MARKER:
-							/*
-							
-							@wip
-							if ( self.settings.defaultMarker !== null ) {
+					
+							// if ( self.settings.defaultMarker !== null ) {
 
 								var icon = {
 							        url: self.settings.defaultMarker,
@@ -283,8 +281,8 @@
 							        scaledSize: new google.maps.Size(50,50)
 							    };
 
-							}
-							*/
+							// }
+					
 
 							var locationObject = {
 						        	lat: 				event.overlay.position.lat(),
@@ -506,11 +504,11 @@
     							animation: 	google.maps.Animation.DROP
 							};
 
-							if ( icon !== false ) {
+							// if ( icon !== false ) {
 
-								mapObjectConfig['icon'] = icon;
+								// mapObjectConfig['icon'] = icon;
 
-							}
+							// }
 
 							var mapObject = new google.maps.Marker(mapObjectConfig);
 
