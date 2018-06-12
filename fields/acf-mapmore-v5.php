@@ -231,44 +231,6 @@ class acf_field_mapmore extends acf_field {
 		</div>
 		<?php
 
-		/*
-	    * Marker icons
-		*/
-		
-		$icons = $this->get_icons();
-
-		if ( is_array($icons--) ) : 
-		
-			$icons_count = count($icons);
-
-		?>
-
-			<div class="acf-field-mapmore-row">
-
-		<?php
-
-			foreach( $icons as $icon ) :
-
-				?>
-				
-				<a href="#" class="acf-field-mapmore-icon-select" data-acf-field-mapmore-icon="<?= $icon ?>">
-					
-					<img src="<?= $icon ?>" alt="Marker icon" width="48" height="48">
-
-				</a>
-
-				<?php
-
-			endforeach;
-
-			?>
-
-			</div>
-
-			<?php
-
-		endif;
-
 
 		/*
 		*  Review the data of $field.
