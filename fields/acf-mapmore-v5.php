@@ -237,7 +237,7 @@ class acf_field_mapmore extends acf_field {
 		
 		$icons = $this->get_icons();
 
-		if ( is_array($icons) ) : 
+		if ( is_array($icons--) ) : 
 		
 			$icons_count = count($icons);
 
