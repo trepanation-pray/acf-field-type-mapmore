@@ -96,7 +96,7 @@
 					}
 				],
 				draggable: true,
-				single: true,
+				single: false,
 				editable: true,
 				drawingManager: true,
 				defaultStrokeColor: 	'#FF0000',
@@ -329,7 +329,7 @@
 				    	self.locations.push(locationObject);
 				    }
 
-				    if ( self.settings.single )
+				    // if ( self.settings.single )
 				    	self.clearLocations();
 
 				    // Delete the drawn shape from map, keep only the one in .locations
@@ -402,7 +402,6 @@
 				});
 
 			},
-
 			addMarker: function(position) {
 
 				var self = this,
@@ -426,8 +425,8 @@
 
 			    this.setLocations();
 
-			    this.storeLocations();
-
+					this.storeLocations();
+					
 			},
 
 			addCircle: function(position) {
@@ -456,7 +455,6 @@
 			    this.storeLocations();
 
 			},
-
 			clearLocations: function() {
 
 				var self = this;
@@ -501,7 +499,7 @@
 								position: 	markerLatLng,
 								map: 		self.map,
 								draggable: 	self.settings.draggable,
-    							animation: 	google.maps.Animation.DROP
+    							// animation: 	google.maps.Animation.DROP
 							};
 
 							// if ( icon !== false ) {
@@ -522,6 +520,12 @@
 								self.storeLocations();
 
 							});
+
+							// google.maps.event.addListener(mapObject, 'rightclick', function(event) {
+
+						
+							
+							// });
 
 						break;
 
