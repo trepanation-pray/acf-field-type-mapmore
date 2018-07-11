@@ -197,6 +197,24 @@
 			        }
 			    );
 
+					google.maps.event.addDomListener( 
+						document.getElementById('mapmore-clear-map'),
+						'click',
+						function( event ) {
+							
+							self.clearLocations();
+							self.storeLocations();
+							
+							var $input = jQuery('input[name="' + self.settings.fieldname + '"]');
+							
+							$input.val('');
+
+							self.locations = [];
+
+						}
+					);
+
+
 			},
 
 			setDrawingManager: function() {
@@ -496,6 +514,7 @@
 							};
 
 							var mapObjectConfig = {
+								id: key,
 								position: 	markerLatLng,
 								map: 		self.map,
 								draggable: 	self.settings.draggable,
@@ -521,11 +540,7 @@
 
 							});
 
-							// google.maps.event.addListener(mapObject, 'rightclick', function(event) {
-
-						
-							
-							// });
+			
 
 						break;
 
@@ -537,6 +552,7 @@
 							};
 
 							var mapObject = new google.maps.Circle({
+								id: key,
 								strokeColor: 	this.settings.defaultStrokeColor,
 								strokeOpacity: 	this.settings.defaultStrokeOpacity,
 								strokeWeight: 	this.settings.defaultStrokeWeight,
@@ -572,6 +588,7 @@
 						case 'polygon':
 
 							var mapObject = new google.maps.Polygon({
+								id: key,
 								path: 			location['path'],
 								strokeColor: 	this.settings.defaultStrokeColor,
 								strokeOpacity: 	this.settings.defaultStrokeOpacity,
@@ -615,11 +632,14 @@
 
 							});
 
+
+
 						break;
 
 						case 'polyline':
 
 							var mapObject = new google.maps.Polyline({
+								id: key,
 								path: 			location['path'],
 								strokeColor: 	this.settings.defaultStrokeColor,
 								strokeOpacity: 	this.settings.defaultStrokeOpacity,
@@ -689,11 +709,17 @@
 						break;
 
 					}
-
+					
 				}
 
 			},
-
+			deleteMarkers() {
+				console.log('ddfdf')
+				// self.clearLocations();
+				// self.storeLocations();
+				// markers = [];
+				// self.mapObjects.setMap(null);
+      },
 			contextmenu: function(latLng, pixel) {
 
 				var self = this,
@@ -758,6 +784,16 @@
 
 			}
 		} );
+
+		// $( document ).ready(function() {
+		// 	$( '.mapmore-clear-map' ).click(function( event ) {
+		// 		event.preventDefault();
+		// 		locations = [];
+		// 		this.settings.map.setMap(null);
+		// 	});
+		// });
+
+		
 
 		// A really lightweight MapMore wrapper around the constructor,
 		// preventing against multiple instantiations
