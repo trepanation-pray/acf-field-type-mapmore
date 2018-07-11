@@ -210,8 +210,8 @@ class acf_field_mapmore extends acf_field {
 						lat: <?= ($field['center_lat'] ?: $this->default_values['center_lat'] ) ?>, 
 						lng: <?= ($field['center_lng'] ?: $this->default_values['center_lng'] ) ?>
 					},
-					zoom: <?= ( $field['zoom'] ?: $this->default_values['zoom'] ) ?>,
-					disableDefaultUI: true
+					zoom: <?= ( $field['zoom'] ?: $this->default_values['zoom'] ) ?>
+					// disableDefaultUI: true
 				}
 			);
 
@@ -224,12 +224,16 @@ class acf_field_mapmore extends acf_field {
 		});
 
 		</script>
+		<p>
+			<a class="button button-primary" id="mapmore-clear-map">Clear map</a>
+		</p>
 		<div class="acf-field-mapmore-row">
 			<div class="acf-field-mapmore-content">
 				<div id="<?= $map_id ?>" style="width:100%;height:400px;"></div>
 			</div>
 		</div>
 		<?php
+
 
 
 		/*
