@@ -9,8 +9,8 @@ if( !class_exists('acf_field_mapmore') ) :
 
 
 class acf_field_mapmore extends acf_field {
-	
-	
+
+
 	/*
 	*  __construct
 	*
@@ -23,34 +23,34 @@ class acf_field_mapmore extends acf_field {
 	*  @param	n/a
 	*  @return	n/a
 	*/
-	
+
 	function __construct() {
-		
+
 		/*
 		*  name (string) Single word, no spaces. Underscores allowed
 		*/
-		
+
 		$this->name = 'mapmore';
-		
-		
+
+
 		/*
 		*  label (string) Multiple words, can include spaces, visible when selecting a field type
 		*/
-		
+
 		$this->label = __('MapMore', 'acf-mapmore');
-		
-		
+
+
 		/*
 		*  category (string) basic | content | choice | relational | jquery | layout | CUSTOM GROUP NAME
 		*/
-		
+
 		$this->category = 'basic';
-		
-		
+
+
 		/*
 		*  defaults (array) Array of default settings which are merged into the field object. These are used later in settings
 		*/
-		
+
 		$this->defaults = array(
 			'height'		=> '',
 			'center_lat'	=> '',
@@ -64,24 +64,24 @@ class acf_field_mapmore extends acf_field {
 			'center_lng'	=> '13.794696',
 			'zoom'			=> '4'
 		);
-		
-		
+
+
 		/*
 		*  l10n (array) Array of strings that are used in JavaScript. This allows JS strings to be translated in PHP and loaded via:
 		*  var message = acf._e('mapmore', 'error');
 		*/
-		
+
 		$this->l10n = array(
 			'error'	=> __('Error! Please enter a higher value', 'acf-mapmore'),
 		);
-		
-				
+
+
 		// do not delete!
     	parent::__construct();
-    	
+
 	}
-	
-	
+
+
 	/*
 	*  render_field_settings()
 	*
@@ -94,9 +94,9 @@ class acf_field_mapmore extends acf_field {
 	*  @param	$field (array) the $field being edited
 	*  @return	n/a
 	*/
-	
+
 	function render_field_settings( $field ) {
-		
+
 		/*
 		*  acf_render_field_setting
 		*
@@ -106,7 +106,7 @@ class acf_field_mapmore extends acf_field {
 		*  More than one setting can be added by copy/paste the above code.
 		*  Please note that you must also have a matching $defaults value for the field name (font_size)
 		*/
-	
+
 		// height
 		acf_render_field_setting( $field, array(
 			'label'			=> __('Height','acf-mapmore'),
@@ -126,8 +126,8 @@ class acf_field_mapmore extends acf_field {
 			'prepend'		=> 'lat',
 			'placeholder'	=> $this->default_values['center_lat']
 		));
-		
-		
+
+
 		// center_lng
 		acf_render_field_setting( $field, array(
 			'label'			=> __('Center','acf-mapmore'),
@@ -140,7 +140,7 @@ class acf_field_mapmore extends acf_field {
 				'data-append' => 'center_lat'
 			)
 		));
-		
+
 		// zoom
 		acf_render_field_setting( $field, array(
 			'label'			=> __('Zoom','acf-mapmore'),
@@ -151,9 +151,25 @@ class acf_field_mapmore extends acf_field {
 		));
 
 	}
-	
-	
-	
+
+    function format_value($value): array {
+
+      if (empty($value)) {
+        return [];
+      }
+
+      if (is_string($value)) {
+        $objects = json_decode($value);
+      } else {
+        $objects = $value;
+      }
+
+      $objects = (array) $objects; // Ensure $objects is an array
+	  return $objects ? (array) reset($objects) : array(); // Check if $objects is not empty before calling reset()
+
+
+    }
+
 	/*
 	*  render_field()
 	*
@@ -168,13 +184,13 @@ class acf_field_mapmore extends acf_field {
 	*  @param	$field (array) the $field being edited
 	*  @return	n/a
 	*/
-	
+
 	function render_field( $field ) {
-		
+
 		/*
 		*  Create a map input
 		*/
-		
+
 		$map_id 					= 'map-' 		. esc_attr($field['key']);		# Map unique identifier
 		$controls_id 				= 'controls-' 	. esc_attr($field['key']);		# Map controls unique identifier
 		$map_id_js					= esc_attr($field['key']);						# Map unique identifier used in js
@@ -183,7 +199,7 @@ class acf_field_mapmore extends acf_field {
 		?>
 
 		<div class="acf-hidden">
-			<input type="hidden" name="<?php echo $field_name ?>" value="<?php echo esc_attr( $field['value'] ); ?>">
+			<input type="hidden" name="<?php echo $field_name ?>" value="<?php echo esc_attr( json_encode( $field['value'] ) ); ?>">
 		</div>
 
 		<script type="text/javascript">
@@ -193,25 +209,23 @@ class acf_field_mapmore extends acf_field {
 
 			<?php if ( !empty($field['value']) ) : ?>
 
-				<?php $current_value = json_decode($field['value']); ?>
-
 				<?php if ( json_last_error() === JSON_ERROR_NONE ) : ?>
 
-					locations<?= $map_id_js ?> = <?= $field['value'] ?>;
+					locations<?= $map_id_js ?> = JSON.parse(<?= json_encode( $field['value'] ) ?>);
 
 				<?php endif; ?>
 
 			<?php endif; ?>
 
 			var map<?= $map_id_js ?> = new google.maps.Map(
-				document.getElementById('<?= $map_id ?>'), 
+				document.getElementById('<?= $map_id ?>'),
 				{
 					center: {
-						lat: <?= ($field['center_lat'] ?: $this->default_values['center_lat'] ) ?>, 
+						lat: <?= ($field['center_lat'] ?: $this->default_values['center_lat'] ) ?>,
 						lng: <?= ($field['center_lng'] ?: $this->default_values['center_lng'] ) ?>
 					},
-					zoom: <?= ( $field['zoom'] ?: $this->default_values['zoom'] ) ?>
-					// disableDefaultUI: true
+					zoom: <?= ( $field['zoom'] ?: $this->default_values['zoom'] ) ?>,
+					disableDefaultUI: true
 				}
 			);
 
@@ -224,16 +238,19 @@ class acf_field_mapmore extends acf_field {
 		});
 
 		</script>
-		<p>
-			<a class="button button-primary" id="mapmore-clear-map">Clear map</a>
-		</p>
 		<div class="acf-field-mapmore-row">
 			<div class="acf-field-mapmore-content">
-				<div id="<?= $map_id ?>" style="width:100%;height:400px;"></div>
+				<div id="<?= $map_id ?>" style="height: <?= ($field['height'] ?: $this->default_values['height'] ) ?>px;"></div>
 			</div>
+		</div>
+		<div class="acf-field-mapmore-row">
+			<p style="text-align: center;">
+				<a class="button button-primary" id="mapmore-clear-map">Clear Map</a>
+			</p>
 		</div>
 		<?php
 
+	
 
 
 		/*
@@ -260,7 +277,7 @@ class acf_field_mapmore extends acf_field {
 			return $icons;
 
 		$files = scandir($dir);
-		
+
 		// If no file is found, return empty result
 		if ( !is_array($files) )
 			return $icons;
@@ -274,7 +291,7 @@ class acf_field_mapmore extends acf_field {
 			switch ( $ext ) {
 
 				case 'svg':
-					
+
 					$icons[] = plugins_url( 'assets/images/icons/'.$file, dirname(__FILE__) );
 
 				break;
@@ -290,8 +307,8 @@ class acf_field_mapmore extends acf_field {
 		return $icons;
 
 	}
-	
-		
+
+
 	/*
 	*  input_admin_enqueue_scripts()
 	*
@@ -305,29 +322,36 @@ class acf_field_mapmore extends acf_field {
 	*  @param	n/a
 	*  @return	n/a
 	*/
-	
+
 	function input_admin_enqueue_scripts() {
-		$google_maps_api_key = 'AIzaSyADY5VHjqxdLKtQ7B6iKf9Em59C617UHvQ';
+
 		$dir = str_replace( 'fields/', '', plugin_dir_url( __FILE__ ) );
-	 	
+
+		// @hotfix: google api key
+		$key = '';
+		$keys = acf_get_setting('mapmore_google_api_key');
+	 	if (isset($keys[0])) {
+	 		$key = $keys[0];
+	 	}
+
 		// register & inlcude Google maps
-		wp_register_script( 'googlemaps-api', '//maps.googleapis.com/maps/api/js?key=AIzaSyADY5VHjqxdLKtQ7B6iKf9Em59C617UHvQ&v=3&libraries=drawing', array(), '3', false );
+		wp_register_script( 'googlemaps-api', '//maps.googleapis.com/maps/api/js?v=weekly&key='.$key.'&libraries=places,drawing', array(), null, false );
 		wp_enqueue_script('googlemaps-api');
 
 
 		// register & include JS
 		wp_register_script( 'acf-input-mapmore', "{$dir}assets/js/input.js" );
 		wp_enqueue_script('acf-input-mapmore');
-		
-		
+
+
 		// register & include CSS
-		wp_register_style( 'acf-input-mapmore', "{$dir}assets/css/input.css" ); 
+		wp_register_style( 'acf-input-mapmore', "{$dir}assets/css/input.css" );
 		wp_enqueue_style('acf-input-mapmore');
-		
-		
+
+
 	}
-	
-	
+
+
 	/*
 	*  input_admin_head()
 	*
@@ -343,21 +367,21 @@ class acf_field_mapmore extends acf_field {
 	*/
 
 	/*
-		
+
 	function input_admin_head() {
-	
-		
-		
+
+
+
 	}
-	
+
 	*/
-	
-	
+
+
 	/*
    	*  input_form_data()
    	*
    	*  This function is called once on the 'input' page between the head and footer
-   	*  There are 2 situations where ACF did not load during the 'acf/input_admin_enqueue_scripts' and 
+   	*  There are 2 situations where ACF did not load during the 'acf/input_admin_enqueue_scripts' and
    	*  'acf/input_admin_head' actions because ACF did not know it was going to be used. These situations are
    	*  seen on comments / user edit forms on the front end. This function will always be called, and includes
    	*  $args that related to the current screen such as $args['post_id']
@@ -369,18 +393,18 @@ class acf_field_mapmore extends acf_field {
    	*  @param	$args (array)
    	*  @return	n/a
    	*/
-   	
+
    	/*
-   	
+
    	function input_form_data( $args ) {
-	   	
-		
-	
+
+
+
    	}
-   	
+
    	*/
-	
-	
+
+
 	/*
 	*  input_admin_footer()
 	*
@@ -396,16 +420,16 @@ class acf_field_mapmore extends acf_field {
 	*/
 
 	/*
-		
+
 	function input_admin_footer() {
-	
-		
-		
+
+
+
 	}
-	
+
 	*/
-	
-	
+
+
 	/*
 	*  field_group_admin_enqueue_scripts()
 	*
@@ -421,14 +445,14 @@ class acf_field_mapmore extends acf_field {
 	*/
 
 	/*
-	
+
 	function field_group_admin_enqueue_scripts() {
-		
+
 	}
-	
+
 	*/
 
-	
+
 	/*
 	*  field_group_admin_head()
 	*
@@ -444,11 +468,11 @@ class acf_field_mapmore extends acf_field {
 	*/
 
 	/*
-	
+
 	function field_group_admin_head() {
-	
+
 	}
-	
+
 	*/
 
 
@@ -466,18 +490,18 @@ class acf_field_mapmore extends acf_field {
 	*  @param	$field (array) the field array holding all the field options
 	*  @return	$value
 	*/
-	
+
 	/*
-	
+
 	function load_value( $value, $post_id, $field ) {
-		
+
 		return $value;
-		
+
 	}
-	
+
 	*/
-	
-	
+
+
 	/*
 	*  update_value()
 	*
@@ -492,18 +516,18 @@ class acf_field_mapmore extends acf_field {
 	*  @param	$field (array) the field array holding all the field options
 	*  @return	$value
 	*/
-	
+
 	/*
-	
+
 	function update_value( $value, $post_id, $field ) {
-		
+
 		return $value;
-		
+
 	}
-	
+
 	*/
-	
-	
+
+
 	/*
 	*  format_value()
 	*
@@ -519,35 +543,35 @@ class acf_field_mapmore extends acf_field {
 	*
 	*  @return	$value (mixed) the modified value
 	*/
-		
+
 	/*
-	
+
 	function format_value( $value, $post_id, $field ) {
-		
+
 		// bail early if no value
 		if( empty($value) ) {
-		
+
 			return $value;
-			
+
 		}
-		
-		
+
+
 		// apply setting
-		if( $field['font_size'] > 12 ) { 
-			
+		if( $field['font_size'] > 12 ) {
+
 			// format the value
 			// $value = 'something';
-		
+
 		}
-		
-		
+
+
 		// return
 		return $value;
 	}
-	
+
 	*/
-	
-	
+
+
 	/*
 	*  validate_value()
 	*
@@ -565,33 +589,33 @@ class acf_field_mapmore extends acf_field {
 	*  @param	$input (string) the corresponding input name for $_POST value
 	*  @return	$valid
 	*/
-	
+
 	/*
-	
+
 	function validate_value( $valid, $value, $field, $input ){
-		
+
 		// Basic usage
 		if( $value < $field['custom_minimum_setting'] )
 		{
 			$valid = false;
 		}
-		
-		
+
+
 		// Advanced usage
 		if( $value < $field['custom_minimum_setting'] )
 		{
 			$valid = __('The value is too little!','acf-mapmore'),
 		}
-		
-		
+
+
 		// return
 		return $valid;
-		
+
 	}
-	
+
 	*/
-	
-	
+
+
 	/*
 	*  delete_value()
 	*
@@ -606,18 +630,18 @@ class acf_field_mapmore extends acf_field {
 	*  @param	$key (string) the $meta_key which the value was deleted
 	*  @return	n/a
 	*/
-	
+
 	/*
-	
+
 	function delete_value( $post_id, $key ) {
-		
-		
-		
+
+
+
 	}
-	
+
 	*/
-	
-	
+
+
 	/*
 	*  load_field()
 	*
@@ -625,23 +649,23 @@ class acf_field_mapmore extends acf_field {
 	*
 	*  @type	filter
 	*  @date	23/01/2013
-	*  @since	3.6.0	
+	*  @since	3.6.0
 	*
 	*  @param	$field (array) the field array holding all the field options
 	*  @return	$field
 	*/
-	
+
 	/*
-	
+
 	function load_field( $field ) {
-		
+
 		return $field;
-		
-	}	
-	
+
+	}
+
 	*/
-	
-	
+
+
 	/*
 	*  update_field()
 	*
@@ -654,18 +678,18 @@ class acf_field_mapmore extends acf_field {
 	*  @param	$field (array) the field array holding all the field options
 	*  @return	$field
 	*/
-	
+
 	/*
-	
+
 	function update_field( $field ) {
-		
+
 		return $field;
-		
-	}	
-	
+
+	}
+
 	*/
-	
-	
+
+
 	/*
 	*  delete_field()
 	*
@@ -678,18 +702,18 @@ class acf_field_mapmore extends acf_field {
 	*  @param	$field (array) the field array holding all the field options
 	*  @return	n/a
 	*/
-	
+
 	/*
-	
+
 	function delete_field( $field ) {
-		
-		
-		
-	}	
-	
+
+
+
+	}
+
 	*/
-	
-	
+
+
 }
 
 

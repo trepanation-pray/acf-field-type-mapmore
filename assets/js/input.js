@@ -1,703 +1,749 @@
-<?php
+(function ($) {
+  function initialize_field($el) {
+    //$el.doStuff();
+  }
 
-// exit if accessed directly
-if( ! defined( 'ABSPATH' ) ) exit;
+  if (typeof acf.add_action !== "undefined") {
+    /*
+     *  ready append (ACF5)
+     *
+     *  These are 2 events which are fired during the page load
+     *  ready = on page load similar to $(document).ready()
+     *  append = on new DOM elements appended via repeater field
+     *
+     *  @type	event
+     *  @date	20/07/13
+     *
+     *  @param	$el (jQuery selection) the jQuery element which contains the ACF fields
+     *  @return	n/a
+     */
+
+    acf.add_action("ready append", function ($el) {
+      // search $el for fields of type 'mapmore'
+      acf.get_fields({ type: "mapmore" }, $el).each(function () {
+        initialize_field($(this));
+      });
+    });
+  } else {
+    /*
+     *  acf/setup_fields (ACF4)
+     *
+     *  This event is triggered when ACF adds any new elements to the DOM.
+     *
+     *  @type	function
+     *  @since	0.3.1
+     *  @date	01/01/12
+     *
+     *  @param	event		e: an event object. This can be ignored
+     *  @param	Element		postbox: An element which contains the new HTML
+     *
+     *  @return	n/a
+     */
+
+    $(document).on("acf/setup_fields", function (e, postbox) {
+      $(postbox)
+        .find('.field[data-field_type="mapmore"]')
+        .each(function () {
+          initialize_field($(this));
+        });
+    });
+  }
+})(jQuery);
+
+// the semi-colon before function invocation is a safety net against concatenated
+// scripts and/or other plugins which may not be closed properly.
+(function ($, window, document, undefined) {
+  "use strict";
+
+  // Create the defaults once
+  var mapMore = "mapMore",
+    defaults = {
+      map: null,
+      contextmenuClass: "mapmore-contextmenu",
+      fieldname: null,
+      defaultCircleRadius: 200000,
+      menu: [
+        {
+          label: "Add Marker",
+          function: "addMarker",
+        },
+        {
+          label: "Add Circle",
+          function: "addCircle",
+        },
+      ],
+      draggable: true,
+      single: true,
+      editable: true,
+      drawingManager: true,
+      defaultStrokeColor: "#FF0000",
+      defaultStrokeOpacity: 0.8,
+      defaultStrokeWeight: 2,
+      defaultFillColor: "#FF0000",
+      defaultFillOpacity: 0.35,
+      markerOptions: [],
+      defaultMarker: null,
+    };
+
+  // The actual plugin constructor
+  function MapMore(element, options) {
+    this.element = element;
+    this.settings = $.extend({}, defaults, options);
+    this._defaults = defaults;
+    this._name = mapMore;
+    this.init();
+  }
+
+  // Avoid MapMore.prototype conflicts
+  $.extend(MapMore.prototype, {
+    init: function () {
+      this.map = this.settings.map;
+      this.mapDiv = this.map.getDiv();
+      this.locations = this.settings.locations;
+      this.mapObjects = [];
+
+      this.addEventListeners();
+
+      this.setLocations();
+
+      this.fitBounds();
+
+      this.activateIconSelect();
+
+      if (this.settings.drawingManager && this.settings.editable)
+        this.setDrawingManager();
+    },
+
+    activateIconSelect: function () {
+      var self = this;
+
+      $("[data-acf-field-mapmore-icon]").click(function () {
+        $("[data-acf-field-mapmore-icon]").removeClass("active");
+
+        $(this).addClass("active");
+
+        self.settings.defaultMarker = $(this).data("acf-field-mapmore-icon");
+      });
+    },
+
+    addEventListeners: function () {
+      var self = this;
+
+      // Display context menu on right click
+      google.maps.event.addListener(self.map, "rightclick", function (event) {
+        // Store last clicked position
+        self.lastClickedPosition = event;
+
+        // Show context menu
+        self.contextmenu(event.latLng, event.pixel);
+      });
+
+      // Close context menus on click
+      google.maps.event.addListener(self.map, "click", function (event) {
+        self.closeContextmenus();
+      });
+
+      // Close context menus on zoom change
+      google.maps.event.addListener(self.map, "zoom_changed", function (event) {
+        self.closeContextmenus();
+      });
+
+      // Close context menus on drag
+      google.maps.event.addListener(self.map, "drag", function (event) {
+        self.closeContextmenus();
+      });
+
+      // clear map
+      document.addEventListener('click', function (event) {
+        if (!event.target.matches('#mapmore-clear-map')) return;
+        self.clearLocations();
+        self.storeLocations();
+
+        var $input = jQuery('input[name="' + self.settings.fieldname + '"]');
+
+        $input.val("");
+
+        self.locations = [];
+      });
 
 
-// check if class already exists
-if( !class_exists('acf_field_mapmore') ) :
+      // clear marker selection
+      document.addEventListener('click', function (event) {
+        if (!event.target.matches('#mapmore-clear-marker')) return;
+          $("[data-acf-field-mapmore-icon]").removeClass("active");
+          self.settings.defaultMarker = null;
+      });
+    
+    },
 
+    setDrawingManager: function () {
+      var self = this;
 
-class acf_field_mapmore extends acf_field {
-	
-	
-	/*
-	*  __construct
-	*
-	*  This function will setup the field type data
-	*
-	*  @type	function
-	*  @date	5/03/2014
-	*  @since	5.0.0
-	*
-	*  @param	n/a
-	*  @return	n/a
-	*/
-	
-	function __construct() {
-		
-		/*
-		*  name (string) Single word, no spaces. Underscores allowed
-		*/
-		
-		$this->name = 'mapmore';
-		
-		
-		/*
-		*  label (string) Multiple words, can include spaces, visible when selecting a field type
-		*/
-		
-		$this->label = __('MapMore', 'acf-mapmore');
-		
-		
-		/*
-		*  category (string) basic | content | choice | relational | jquery | layout | CUSTOM GROUP NAME
-		*/
-		
-		$this->category = 'basic';
-		
-		
-		/*
-		*  defaults (array) Array of default settings which are merged into the field object. These are used later in settings
-		*/
-		
-		$this->defaults = array(
-			'height'		=> '',
-			'center_lat'	=> '',
-			'center_lng'	=> '',
-			'zoom'			=> ''
-		);
+      var drawingManager = new google.maps.drawing.DrawingManager({
+        //drawingMode: google.maps.drawing.OverlayType.MARKER,
+        drawingControl: true,
+        drawingControlOptions: {
+          position: google.maps.ControlPosition.TOP_CENTER,
+          drawingModes: [
+            google.maps.drawing.OverlayType.MARKER,
+            google.maps.drawing.OverlayType.CIRCLE,
+            google.maps.drawing.OverlayType.POLYGON,
+            google.maps.drawing.OverlayType.POLYLINE,
+            google.maps.drawing.OverlayType.RECTANGLE,
+          ],
+        },
+        markerOptions: {
+          //icon: 'https://developers.google.com/maps/documentation/javascript/examples/full/images/beachflag.png'
+        },
+        circleOptions: {
+          strokeColor: this.settings.defaultStrokeColor,
+          strokeOpacity: this.settings.defaultStrokeOpacity,
+          strokeWeight: this.settings.defaultStrokeWeight,
+          fillColor: this.settings.defaultFillColor,
+          fillOpacity: this.settings.defaultFillOpacity,
+          editable: true,
+          zIndex: 1,
+        },
+        polygonOptions: {
+          strokeColor: this.settings.defaultStrokeColor,
+          strokeOpacity: this.settings.defaultStrokeOpacity,
+          strokeWeight: this.settings.defaultStrokeWeight,
+          fillColor: this.settings.defaultFillColor,
+          fillOpacity: this.settings.defaultFillOpacity,
+          editable: true,
+          zIndex: 1,
+        },
+        polylineOptions: {
+          strokeColor: this.settings.defaultStrokeColor,
+          strokeOpacity: this.settings.defaultStrokeOpacity,
+          strokeWeight: this.settings.defaultStrokeWeight,
+          editable: true,
+          zIndex: 1,
+        },
+        rectangleOptions: {
+          strokeColor: this.settings.defaultStrokeColor,
+          strokeOpacity: this.settings.defaultStrokeOpacity,
+          strokeWeight: this.settings.defaultStrokeWeight,
+          fillColor: this.settings.defaultFillColor,
+          fillOpacity: this.settings.defaultFillOpacity,
+          editable: true,
+          zIndex: 1,
+        },
+      });
+      drawingManager.setMap(this.map);
 
-		$this->default_values = array(
-			'height'		=> '400',
-			'center_lat'	=> '50.0665797',
-			'center_lng'	=> '13.794696',
-			'zoom'			=> '4'
-		);
-		
-		
-		/*
-		*  l10n (array) Array of strings that are used in JavaScript. This allows JS strings to be translated in PHP and loaded via:
-		*  var message = acf._e('mapmore', 'error');
-		*/
-		
-		$this->l10n = array(
-			'error'	=> __('Error! Please enter a higher value', 'acf-mapmore'),
-		);
-		
-				
-		// do not delete!
-    	parent::__construct();
-    	
-	}
-	
-	
-	/*
-	*  render_field_settings()
-	*
-	*  Create extra settings for your field. These are visible when editing a field
-	*
-	*  @type	action
-	*  @since	3.6
-	*  @date	23/01/13
-	*
-	*  @param	$field (array) the $field being edited
-	*  @return	n/a
-	*/
-	
-	function render_field_settings( $field ) {
-		
-		/*
-		*  acf_render_field_setting
-		*
-		*  This function will create a setting for your field. Simply pass the $field parameter and an array of field settings.
-		*  The array of settings does not require a `value` or `prefix`; These settings are found from the $field array.
-		*
-		*  More than one setting can be added by copy/paste the above code.
-		*  Please note that you must also have a matching $defaults value for the field name (font_size)
-		*/
-	
-		// height
-		acf_render_field_setting( $field, array(
-			'label'			=> __('Height','acf-mapmore'),
-			'instructions'	=> __('Customise the map height','acf-mapmore'),
-			'type'			=> 'text',
-			'name'			=> 'height',
-			'append'		=> 'px',
-			'placeholder'	=> $this->default_values['height']
-		));
+      google.maps.event.addListener(
+        drawingManager,
+        "overlaycomplete",
+        function (event) {
+          switch (event.type) {
+            case google.maps.drawing.OverlayType.CIRCLE:
+              var locationObject = {
+                lat: event.overlay.center.lat(),
+                lng: event.overlay.center.lng(),
+                type: "circle",
+                radius: event.overlay.getRadius(),
+              };
 
-		// center_lat
-		acf_render_field_setting( $field, array(
-			'label'			=> __('Center','acf-mapmore'),
-			'instructions'	=> __('Center the initial map','acf-mapmore'),
-			'type'			=> 'text',
-			'name'			=> 'center_lat',
-			'prepend'		=> 'lat',
-			'placeholder'	=> $this->default_values['center_lat']
-		));
-		
-		
-		// center_lng
-		acf_render_field_setting( $field, array(
-			'label'			=> __('Center','acf-mapmore'),
-			'instructions'	=> __('Center the initial map','acf-mapmore'),
-			'type'			=> 'text',
-			'name'			=> 'center_lng',
-			'prepend'		=> 'lng',
-			'placeholder'	=> $this->default_values['center_lng'],
-			'wrapper'		=> array(
-				'data-append' => 'center_lat'
-			)
-		));
-		
-		// zoom
-		acf_render_field_setting( $field, array(
-			'label'			=> __('Zoom','acf-mapmore'),
-			'instructions'	=> __('Set the initial zoom level','acf-mapmore'),
-			'type'			=> 'text',
-			'name'			=> 'zoom',
-			'placeholder'	=> $this->default_values['zoom']
-		));
+              break;
 
-	}
-	
-	
-	
-	/*
-	*  render_field()
-	*
-	*  Create the HTML interface for your field
-	*
-	*  @param	$field (array) the $field being rendered
-	*
-	*  @type	action
-	*  @since	3.6
-	*  @date	23/01/13
-	*
-	*  @param	$field (array) the $field being edited
-	*  @return	n/a
-	*/
-	
-	function render_field( $field ) {
-		
-		/*
-		*  Create a map input
-		*/
-		
-		$map_id 					= 'map-' 		. esc_attr($field['key']);		# Map unique identifier
-		$controls_id 				= 'controls-' 	. esc_attr($field['key']);		# Map controls unique identifier
-		$map_id_js					= esc_attr($field['key']);						# Map unique identifier used in js
-		$field_name 				= esc_attr($field['name']);
+            case google.maps.drawing.OverlayType.MARKER:
+              /*
+							
+				@wip
+				if ( self.settings.defaultMarker !== null ) {
 
-		?>
+					var icon = {
+						url: self.settings.defaultMarker,
+						anchor: new google.maps.Point(25,50),
+						scaledSize: new google.maps.Size(50,50)
+					};
 
-		<div class="acf-hidden">
-			<input type="hidden" name="<?php echo $field_name ?>" value="<?php echo esc_attr( $field['value'] ); ?>">
-		</div>
-
-		<script type="text/javascript">
-		jQuery(function($){
-
-			var locations<?= $map_id_js ?> = [];
-
-			<?php if ( !empty($field['value']) ) : ?>
-
-				<?php $current_value = json_decode($field['value']); ?>
-
-				<?php if ( json_last_error() === JSON_ERROR_NONE ) : ?>
-
-					locations<?= $map_id_js ?> = <?= $field['value'] ?>;
-
-				<?php endif; ?>
-
-			<?php endif; ?>
-
-			var map<?= $map_id_js ?> = new google.maps.Map(
-				document.getElementById('<?= $map_id ?>'), 
-				{
-					center: {
-						lat: <?= ($field['center_lat'] ?: $this->default_values['center_lat'] ) ?>, 
-						lng: <?= ($field['center_lng'] ?: $this->default_values['center_lng'] ) ?>
-					},
-					zoom: <?= ( $field['zoom'] ?: $this->default_values['zoom'] ) ?>
-					// disableDefaultUI: true
 				}
-			);
+				*/
 
-			$('#<?= $map_id ?>').mapMore({
-				map: map<?= $map_id_js ?>,
-				fieldname: '<?= $field_name ?>',
-				locations: locations<?= $map_id_js ?>
-			});
+              var locationObject = {
+                lat: event.overlay.position.lat(),
+                lng: event.overlay.position.lng(),
+                type: "marker",
+              };
 
-		});
+              break;
 
-		</script>
-		<p>
-			<a class="button button-primary" id="mapmore-clear-map">Clear map</a>
-		</p>
-		<div class="acf-field-mapmore-row">
-			<div class="acf-field-mapmore-content">
-				<div id="<?= $map_id ?>" style="width:100%;height:400px;"></div>
-			</div>
-		</div>
-		<?php
+            case google.maps.drawing.OverlayType.POLYGON:
+              var locationObject = {
+                path: event.overlay.getPath().getArray(),
+                type: "polygon",
+              };
 
+              break;
 
+            case google.maps.drawing.OverlayType.POLYLINE:
+              var locationObject = {
+                path: event.overlay.getPath().getArray(),
+                type: "polyline",
+              };
 
-		/*
-		*  Review the data of $field.
-		*  This will show what data is available
-		*/
-		/*
-		echo '<pre>';
-			print_r( $field );
-		echo '</pre>';
-		*/
-	}
+              break;
 
-	function get_icons() {
+            case google.maps.drawing.OverlayType.RECTANGLE:
+              var locationObject = {
+                bounds: event.overlay.getBounds(),
+                type: "rectangle",
+              };
 
-		// Prepare icons array
-		$icons = [];
+              break;
+          }
 
-		// Define directory where icons are stored
-		$dir = __DIR__ . '/../assets/images/icons/';
+          if (self.settings.single) {
+            self.locations = [locationObject];
+          } else {
+            self.locations.push(locationObject);
+          }
 
-		// If directory does not exist, return empty result
-		if ( !file_exists($dir) )
-			return $icons;
+          if (self.settings.single) self.clearLocations();
 
-		$files = scandir($dir);
-		
-		// If no file is found, return empty result
-		if ( !is_array($files) )
-			return $icons;
+          // Delete the drawn shape from map, keep only the one in .locations
+          event.overlay.setMap(null);
 
-		foreach( $files as $file ) {
+          self.setLocations();
 
-			$filepath = $dir . $file;
+          self.storeLocations();
+        }
+      );
+    },
 
-			$ext = pathinfo($filepath, PATHINFO_EXTENSION);
+    getContextmenuHtml: function () {
+      var html = '<ul class="' + this.settings.contextmenuClass + '">';
 
-			switch ( $ext ) {
+      for (var key in this.settings.menu) {
+        var item = this.settings.menu[key];
 
-				case 'svg':
-					
-					$icons[] = plugins_url( 'assets/images/icons/'.$file, dirname(__FILE__) );
+        html +=
+          "<li>" +
+          '<a href="#" data-function="' +
+          item["function"] +
+          '">' +
+          item["label"] +
+          "</a>" +
+          "</li>";
+      }
 
-				break;
+      html += "</ul>";
 
-				default:
-					// @todo - support png
-				break;
+      return html;
+    },
 
-			}
+    closeContextmenus: function () {
+      jQuery(this.mapDiv)
+        .find("." + this.settings.contextmenuClass)
+        .remove();
+    },
 
-		}
+    displayContextmenu: function () {
+      jQuery(this.mapDiv)
+        .find("." + this.settings.contextmenuClass)
+        .css({
+          visibility: "visible",
+        });
+    },
 
-		return $icons;
+    activateContextMenu: function (path, vertext) {
+      var self = this;
 
-	}
-	
-		
-	/*
-	*  input_admin_enqueue_scripts()
-	*
-	*  This action is called in the admin_enqueue_scripts action on the edit screen where your field is created.
-	*  Use this action to add CSS + JavaScript to assist your render_field() action.
-	*
-	*  @type	action (admin_enqueue_scripts)
-	*  @since	3.6
-	*  @date	23/01/13
-	*
-	*  @param	n/a
-	*  @return	n/a
-	*/
-	
-	function input_admin_enqueue_scripts() {
-		$google_maps_api_key = 'AIzaSyADY5VHjqxdLKtQ7B6iKf9Em59C617UHvQ';
-		$dir = str_replace( 'fields/', '', plugin_dir_url( __FILE__ ) );
-	 	
-		// register & inlcude Google maps
-		wp_register_script( 'googlemaps-api', '//maps.googleapis.com/maps/api/js?key=AIzaSyADY5VHjqxdLKtQ7B6iKf9Em59C617UHvQ&v=3&libraries=drawing', array(), '3', false );
-		wp_enqueue_script('googlemaps-api');
+      jQuery(this.mapDiv)
+        .find("." + this.settings.contextmenuClass + " a")
+        .click(function () {
+          event.preventDefault();
 
+          var func = $(this).data("function");
 
-		// register & include JS
-		wp_register_script( 'acf-input-mapmore', "{$dir}assets/js/input.js" );
-		wp_enqueue_script('acf-input-mapmore');
-		
-		
-		// register & include CSS
-		wp_register_style( 'acf-input-mapmore', "{$dir}assets/css/input.css" ); 
-		wp_enqueue_style('acf-input-mapmore');
-		
-		
-	}
-	
-	
-	/*
-	*  input_admin_head()
-	*
-	*  This action is called in the admin_head action on the edit screen where your field is created.
-	*  Use this action to add CSS and JavaScript to assist your render_field() action.
-	*
-	*  @type	action (admin_head)
-	*  @since	3.6
-	*  @date	23/01/13
-	*
-	*  @param	n/a
-	*  @return	n/a
-	*/
+          if (typeof self[func] == "undefined") {
+            alert("Function " + func + " is not implemented.");
+            return false;
+          } else {
+            self[func](self.lastClickedPosition);
 
-	/*
-		
-	function input_admin_head() {
-	
-		
-		
-	}
-	
-	*/
-	
-	
-	/*
-   	*  input_form_data()
-   	*
-   	*  This function is called once on the 'input' page between the head and footer
-   	*  There are 2 situations where ACF did not load during the 'acf/input_admin_enqueue_scripts' and 
-   	*  'acf/input_admin_head' actions because ACF did not know it was going to be used. These situations are
-   	*  seen on comments / user edit forms on the front end. This function will always be called, and includes
-   	*  $args that related to the current screen such as $args['post_id']
-   	*
-   	*  @type	function
-   	*  @date	6/03/2014
-   	*  @since	5.0.0
-   	*
-   	*  @param	$args (array)
-   	*  @return	n/a
-   	*/
-   	
-   	/*
-   	
-   	function input_form_data( $args ) {
-	   	
-		
-	
-   	}
-   	
-   	*/
-	
-	
-	/*
-	*  input_admin_footer()
-	*
-	*  This action is called in the admin_footer action on the edit screen where your field is created.
-	*  Use this action to add CSS and JavaScript to assist your render_field() action.
-	*
-	*  @type	action (admin_footer)
-	*  @since	3.6
-	*  @date	23/01/13
-	*
-	*  @param	n/a
-	*  @return	n/a
-	*/
+            self.closeContextmenus();
+          }
+        });
+    },
 
-	/*
-		
-	function input_admin_footer() {
-	
-		
-		
-	}
-	
-	*/
-	
-	
-	/*
-	*  field_group_admin_enqueue_scripts()
-	*
-	*  This action is called in the admin_enqueue_scripts action on the edit screen where your field is edited.
-	*  Use this action to add CSS + JavaScript to assist your render_field_options() action.
-	*
-	*  @type	action (admin_enqueue_scripts)
-	*  @since	3.6
-	*  @date	23/01/13
-	*
-	*  @param	n/a
-	*  @return	n/a
-	*/
+    addMarker: function (position) {
+      var self = this,
+        locationObject = {
+          lat: position.latLng.lat(),
+          lng: position.latLng.lng(),
+          type: "marker",
+        };
 
-	/*
-	
-	function field_group_admin_enqueue_scripts() {
-		
-	}
-	
-	*/
+      if (this.settings.single) {
+        this.locations = [locationObject];
+      } else {
+        this.locations.push(locationObject);
+      }
 
-	
-	/*
-	*  field_group_admin_head()
-	*
-	*  This action is called in the admin_head action on the edit screen where your field is edited.
-	*  Use this action to add CSS and JavaScript to assist your render_field_options() action.
-	*
-	*  @type	action (admin_head)
-	*  @since	3.6
-	*  @date	23/01/13
-	*
-	*  @param	n/a
-	*  @return	n/a
-	*/
+      if (this.settings.single) this.clearLocations();
 
-	/*
-	
-	function field_group_admin_head() {
-	
-	}
-	
-	*/
+      this.setLocations();
 
+      this.storeLocations();
+    },
 
-	/*
-	*  load_value()
-	*
-	*  This filter is applied to the $value after it is loaded from the db
-	*
-	*  @type	filter
-	*  @since	3.6
-	*  @date	23/01/13
-	*
-	*  @param	$value (mixed) the value found in the database
-	*  @param	$post_id (mixed) the $post_id from which the value was loaded
-	*  @param	$field (array) the field array holding all the field options
-	*  @return	$value
-	*/
-	
-	/*
-	
-	function load_value( $value, $post_id, $field ) {
-		
-		return $value;
-		
-	}
-	
-	*/
-	
-	
-	/*
-	*  update_value()
-	*
-	*  This filter is applied to the $value before it is saved in the db
-	*
-	*  @type	filter
-	*  @since	3.6
-	*  @date	23/01/13
-	*
-	*  @param	$value (mixed) the value found in the database
-	*  @param	$post_id (mixed) the $post_id from which the value was loaded
-	*  @param	$field (array) the field array holding all the field options
-	*  @return	$value
-	*/
-	
-	/*
-	
-	function update_value( $value, $post_id, $field ) {
-		
-		return $value;
-		
-	}
-	
-	*/
-	
-	
-	/*
-	*  format_value()
-	*
-	*  This filter is appied to the $value after it is loaded from the db and before it is returned to the template
-	*
-	*  @type	filter
-	*  @since	3.6
-	*  @date	23/01/13
-	*
-	*  @param	$value (mixed) the value which was loaded from the database
-	*  @param	$post_id (mixed) the $post_id from which the value was loaded
-	*  @param	$field (array) the field array holding all the field options
-	*
-	*  @return	$value (mixed) the modified value
-	*/
-		
-	/*
-	
-	function format_value( $value, $post_id, $field ) {
-		
-		// bail early if no value
-		if( empty($value) ) {
-		
-			return $value;
-			
-		}
-		
-		
-		// apply setting
-		if( $field['font_size'] > 12 ) { 
-			
-			// format the value
-			// $value = 'something';
-		
-		}
-		
-		
-		// return
-		return $value;
-	}
-	
-	*/
-	
-	
-	/*
-	*  validate_value()
-	*
-	*  This filter is used to perform validation on the value prior to saving.
-	*  All values are validated regardless of the field's required setting. This allows you to validate and return
-	*  messages to the user if the value is not correct
-	*
-	*  @type	filter
-	*  @date	11/02/2014
-	*  @since	5.0.0
-	*
-	*  @param	$valid (boolean) validation status based on the value and the field's required setting
-	*  @param	$value (mixed) the $_POST value
-	*  @param	$field (array) the field array holding all the field options
-	*  @param	$input (string) the corresponding input name for $_POST value
-	*  @return	$valid
-	*/
-	
-	/*
-	
-	function validate_value( $valid, $value, $field, $input ){
-		
-		// Basic usage
-		if( $value < $field['custom_minimum_setting'] )
-		{
-			$valid = false;
-		}
-		
-		
-		// Advanced usage
-		if( $value < $field['custom_minimum_setting'] )
-		{
-			$valid = __('The value is too little!','acf-mapmore'),
-		}
-		
-		
-		// return
-		return $valid;
-		
-	}
-	
-	*/
-	
-	
-	/*
-	*  delete_value()
-	*
-	*  This action is fired after a value has been deleted from the db.
-	*  Please note that saving a blank value is treated as an update, not a delete
-	*
-	*  @type	action
-	*  @date	6/03/2014
-	*  @since	5.0.0
-	*
-	*  @param	$post_id (mixed) the $post_id from which the value was deleted
-	*  @param	$key (string) the $meta_key which the value was deleted
-	*  @return	n/a
-	*/
-	
-	/*
-	
-	function delete_value( $post_id, $key ) {
-		
-		
-		
-	}
-	
-	*/
-	
-	
-	/*
-	*  load_field()
-	*
-	*  This filter is applied to the $field after it is loaded from the database
-	*
-	*  @type	filter
-	*  @date	23/01/2013
-	*  @since	3.6.0	
-	*
-	*  @param	$field (array) the field array holding all the field options
-	*  @return	$field
-	*/
-	
-	/*
-	
-	function load_field( $field ) {
-		
-		return $field;
-		
-	}	
-	
-	*/
-	
-	
-	/*
-	*  update_field()
-	*
-	*  This filter is applied to the $field before it is saved to the database
-	*
-	*  @type	filter
-	*  @date	23/01/2013
-	*  @since	3.6.0
-	*
-	*  @param	$field (array) the field array holding all the field options
-	*  @return	$field
-	*/
-	
-	/*
-	
-	function update_field( $field ) {
-		
-		return $field;
-		
-	}	
-	
-	*/
-	
-	
-	/*
-	*  delete_field()
-	*
-	*  This action is fired after a field is deleted from the database
-	*
-	*  @type	action
-	*  @date	11/02/2014
-	*  @since	5.0.0
-	*
-	*  @param	$field (array) the field array holding all the field options
-	*  @return	n/a
-	*/
-	
-	/*
-	
-	function delete_field( $field ) {
-		
-		
-		
-	}	
-	
-	*/
-	
-	
-}
+    addCircle: function (position) {
+      var self = this,
+        locationObject = {
+          lat: position.latLng.lat(),
+          lng: position.latLng.lng(),
+          type: "circle",
+          radius: self.settings.defaultCircleRadius,
+        };
 
+      if (this.settings.single) {
+        this.locations = [locationObject];
+      } else {
+        this.locations.push(locationObject);
+      }
 
-// create initialize
-new acf_field_mapmore();
+      if (this.settings.single) this.clearLocations();
 
+      this.setLocations();
 
-// class_exists check
-endif;
+      this.storeLocations();
+    },
 
-?>
+    clearLocations: function () {
+      var self = this;
+
+      for (var key in self.mapObjects) {
+        var mapObject = self.mapObjects[key];
+
+        mapObject.setMap(null);
+      }
+    },
+
+    storeLocations: function () {
+      var $input = jQuery('input[name="' + this.settings.fieldname + '"]');
+
+      $input.val(JSON.stringify(this.locations));
+    },
+
+    setLocations: function () {
+      var self = this;
+
+      for (var key in this.locations) {
+        var location = this.locations[key];
+
+        switch (location.type) {
+          case "marker":
+            var markerLatLng = {
+              lat: location.lat,
+              lng: location.lng,
+            };
+
+            var mapObjectConfig = {
+              position: markerLatLng,
+              map: self.map,
+              draggable: self.settings.draggable,
+              animation: google.maps.Animation.DROP,
+            };
+
+            if (self.settings.defaultMarker !== null) {
+              mapObjectConfig["icon"] = self.settings.defaultMarker;
+            }
+
+            var mapObject = new google.maps.Marker(mapObjectConfig);
+
+            self.mapObjects.push(mapObject);
+
+            google.maps.event.addListener(
+              mapObject,
+              "dragend",
+              function (event) {
+                self.locations[key]["lat"] = event.latLng.lat();
+                self.locations[key]["lng"] = event.latLng.lng();
+
+                self.storeLocations();
+              }
+            );
+
+            break;
+
+          case "circle":
+            var markerLatLng = {
+              lat: location.lat,
+              lng: location.lng,
+            };
+
+            var mapObject = new google.maps.Circle({
+              strokeColor: this.settings.defaultStrokeColor,
+              strokeOpacity: this.settings.defaultStrokeOpacity,
+              strokeWeight: this.settings.defaultStrokeWeight,
+              fillColor: this.settings.defaultFillColor,
+              fillOpacity: this.settings.defaultFillOpacity,
+              map: self.map,
+              center: markerLatLng,
+              radius: location.radius,
+              editable: self.settings.editable,
+            });
+
+            self.mapObjects.push(mapObject);
+
+            google.maps.event.addListener(
+              mapObject,
+              "radius_changed",
+              function () {
+                self.locations[key]["radius"] = mapObject.getRadius();
+
+                self.storeLocations();
+              }
+            );
+
+            google.maps.event.addListener(
+              mapObject,
+              "center_changed",
+              function (event) {
+                self.locations[key]["lat"] = mapObject.getCenter().lat();
+                self.locations[key]["lng"] = mapObject.getCenter().lng();
+
+                self.storeLocations();
+              }
+            );
+
+            break;
+
+          case "polygon":
+            var mapObject = new google.maps.Polygon({
+              path: location["path"],
+              strokeColor: this.settings.defaultStrokeColor,
+              strokeOpacity: this.settings.defaultStrokeOpacity,
+              strokeWeight: this.settings.defaultStrokeWeight,
+              fillColor: this.settings.defaultFillColor,
+              fillOpacity: this.settings.defaultFillOpacity,
+              map: self.map,
+              editable: self.settings.editable,
+            });
+
+            self.mapObjects.push(mapObject);
+
+            google.maps.event.addListener(
+              mapObject.getPath(),
+              "set_at",
+              function (event) {
+                self.locations[key]["path"] = mapObject.getPath().getArray();
+
+                self.storeLocations();
+              }
+            );
+
+            google.maps.event.addListener(
+              mapObject.getPath(),
+              "insert_at",
+              function () {
+                self.locations[key]["path"] = mapObject.getPath().getArray();
+
+                self.storeLocations();
+              }
+            );
+
+            google.maps.event.addListener(
+              mapObject,
+              "rightclick",
+              function (event) {
+                // Check if click was on a vertex control point
+                if (typeof event.vertex === "undefined") {
+                  return;
+                }
+
+                mapObject.getPath().removeAt(event.vertex);
+
+                self.locations[key]["path"] = mapObject.getPath().getArray();
+
+                self.storeLocations();
+              }
+            );
+
+            break;
+
+          case "polyline":
+            var mapObject = new google.maps.Polyline({
+              path: location["path"],
+              strokeColor: this.settings.defaultStrokeColor,
+              strokeOpacity: this.settings.defaultStrokeOpacity,
+              strokeWeight: this.settings.defaultStrokeWeight,
+              map: self.map,
+              editable: self.settings.editable,
+            });
+
+            self.mapObjects.push(mapObject);
+
+            google.maps.event.addListener(
+              mapObject.getPath(),
+              "set_at",
+              function (event) {
+                self.locations[key]["path"] = mapObject.getPath().getArray();
+
+                self.storeLocations();
+              }
+            );
+
+            google.maps.event.addListener(
+              mapObject.getPath(),
+              "insert_at",
+              function () {
+                self.locations[key]["path"] = mapObject.getPath().getArray();
+
+                self.storeLocations();
+              }
+            );
+
+            google.maps.event.addListener(
+              mapObject,
+              "rightclick",
+              function (event) {
+                // Check if click was on a vertex control point
+                if (typeof event.vertex === "undefined") {
+                  return;
+                }
+
+                mapObject.getPath().removeAt(event.vertex);
+
+                self.locations[key]["path"] = mapObject.getPath().getArray();
+
+                self.storeLocations();
+              }
+            );
+
+            break;
+
+          case "rectangle":
+            var mapObject = new google.maps.Rectangle({
+              bounds: location["bounds"],
+              strokeColor: this.settings.defaultStrokeColor,
+              strokeOpacity: this.settings.defaultStrokeOpacity,
+              strokeWeight: this.settings.defaultStrokeWeight,
+              fillColor: this.settings.defaultFillColor,
+              fillOpacity: this.settings.defaultFillOpacity,
+              map: self.map,
+              editable: self.settings.editable,
+            });
+
+            self.mapObjects.push(mapObject);
+
+            google.maps.event.addListener(
+              mapObject,
+              "bounds_changed",
+              function (event) {
+                self.locations[key]["bounds"] = mapObject.getBounds();
+
+                self.storeLocations();
+              }
+            );
+
+            break;
+        }
+      }
+    },
+
+    fitBounds: function () {
+      var bounds = new google.maps.LatLngBounds();
+      var hasBounds = false;
+
+      for (var key in this.mapObjects) {
+        var mapObject = this.mapObjects[key];
+
+        if (
+          mapObject instanceof google.maps.Circle ||
+          mapObject instanceof google.maps.Rectangle
+        ) {
+          bounds.union(mapObject.getBounds());
+          hasBounds = true;
+        }
+
+        if (mapObject instanceof google.maps.Polygon) {
+          mapObject.getPaths().forEach(function (path) {
+            path.forEach(function (latLng) {
+              bounds.extend(latLng);
+            });
+          });
+          hasBounds = true;
+        }
+      }
+
+      if (hasBounds) {
+        this.map.fitBounds(bounds);
+        this.map.setCenter(bounds.getCenter());
+      }
+    },
+
+    contextmenu: function (latLng, pixel) {
+      var self = this,
+        projection,
+        contextmenuDir;
+
+      projection = self.map.getProjection();
+
+      self.closeContextmenus();
+
+      jQuery(self.mapDiv).append(self.getContextmenuHtml());
+
+      // Figure out position of context menu
+      self.setContextmenuXY(latLng, pixel);
+
+      // Activate buttons in context menu
+      self.activateContextMenu();
+
+      // Enable visibility of context menu
+      self.displayContextmenu();
+    },
+
+    setContextmenuXY: function (latLng, pixel) {
+      var self = this;
+
+      var mapWidth = jQuery(self.mapDiv).width(),
+        mapHeight = jQuery(self.mapDiv).height(),
+        menuWidth = jQuery("." + this.settings.contextmenuClass).width(),
+        menuHeight = jQuery("." + this.settings.contextmenuClass).height();
+
+      var x = pixel.x,
+        y = pixel.y;
+
+      if (mapWidth - x < menuWidth)
+        //if to close to the map border, decrease x position
+        x = x - menuWidth;
+      if (mapHeight - y < menuHeight)
+        //if to close to the map border, decrease y position
+        y = y - menuHeight;
+
+      jQuery("." + this.settings.contextmenuClass).css("left", x);
+      jQuery("." + this.settings.contextmenuClass).css("top", y);
+    },
+
+    getCanvasXY: function (latLng) {
+      var self = this;
+
+      var scale = Math.pow(2, self.map.getZoom());
+      var nw = new google.maps.LatLng(
+        self.map.getBounds().getNorthEast().lat(),
+        self.map.getBounds().getSouthWest().lng()
+      );
+      var worldCoordinateNW = self.map.getProjection().fromLatLngToPoint(nw);
+      var worldCoordinate = self.map.getProjection().fromLatLngToPoint(latLng);
+      var caurrentLatLngOffset = new google.maps.Point(
+        Math.floor((worldCoordinate.x - worldCoordinateNW.x) * scale),
+        Math.floor((worldCoordinate.y - worldCoordinateNW.y) * scale)
+      );
+      return caurrentLatLngOffset;
+    },
+  });
+
+  // A really lightweight MapMore wrapper around the constructor,
+  // preventing against multiple instantiations
+  $.fn[mapMore] = function (options) {
+    return this.each(function () {
+      if (!$.data(this, "mapmore_" + mapMore)) {
+        $.data(this, "mapmore_" + mapMore, new MapMore(this, options));
+      }
+    });
+  };
+})(jQuery, window, document);
