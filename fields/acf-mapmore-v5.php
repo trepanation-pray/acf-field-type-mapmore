@@ -199,7 +199,7 @@ class acf_field_mapmore extends acf_field {
 		?>
 
 		<div class="acf-hidden">
-			<input type="hidden" name="<?php echo $field_name ?>" value="<?php echo esc_attr( json_encode( $field['value'] ) ); ?>">
+			<input type="hidden" name="<?php echo $field_name ?>" value="<?php echo esc_attr( $field['value'] ); ?>">
 		</div>
 
 		<script type="text/javascript">
