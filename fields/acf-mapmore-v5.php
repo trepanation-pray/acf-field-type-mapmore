@@ -199,45 +199,107 @@ class acf_field_mapmore extends acf_field {
 		?>
 
 		<div class="acf-hidden">
-			<input type="hidden" name="<?php echo $field_name ?>" value="<?php echo esc_attr( $field['value'] ); ?>">
+			<input type="hidden" name="<?php echo $field_name ?>" value="<?php echo esc_attr(  $field['value'] ); ?>">
 		</div>
 
 		<script type="text/javascript">
 		jQuery(function($){
 
-			var locations<?= $map_id_js ?> = [];
+		// Retrieve the existing locations from the hidden input field
+		var $input = $('input[name="<?php echo $field_name; ?>"]');
+		var locations = [];
 
-			<?php if ( !empty($field['value']) ) : ?>
+		if ($input.val()) {
+			try {
+			locations = JSON.parse($input.val());
+			} catch (e) {
+			console.error('Error parsing location data:', e);
+			}
+		}
 
-				<?php if ( json_last_error() === JSON_ERROR_NONE ) : ?>
-
-					locations<?= $map_id_js ?> = JSON.parse(<?= json_encode( $field['value'] ) ?>);
-
-				<?php endif; ?>
-
-			<?php endif; ?>
-
-			var map<?= $map_id_js ?> = new google.maps.Map(
-				document.getElementById('<?= $map_id ?>'),
-				{
-					center: {
-						lat: <?= ($field['center_lat'] ?: $this->default_values['center_lat'] ) ?>,
-						lng: <?= ($field['center_lng'] ?: $this->default_values['center_lng'] ) ?>
-					},
-					zoom: <?= ( $field['zoom'] ?: $this->default_values['zoom'] ) ?>,
-					disableDefaultUI: true
-				}
-			);
-
-			$('#<?= $map_id ?>').mapMore({
-				map: map<?= $map_id_js ?>,
-				fieldname: '<?= $field_name ?>',
-				locations: locations<?= $map_id_js ?>
-			});
-
+		// Initialize the map
+		var map = new google.maps.Map(document.getElementById('<?php echo $map_id; ?>'), {
+			center: {
+			lat: <?php echo ($field['center_lat'] ?: $this->default_values['center_lat']); ?>,
+			lng: <?php echo ($field['center_lng'] ?: $this->default_values['center_lng']); ?>
+			},
+			zoom: <?php echo ($field['zoom'] ?: $this->default_values['zoom']); ?>,
+			disableDefaultUI: false // Enable default UI controls
 		});
 
+		// Initialize the search box
+		var input = document.getElementById('pac-input-<?php echo $map_id; ?>');
+		var autocomplete = new google.maps.places.Autocomplete(input);
+
+		// Bind the map's bounds (viewport) to the autocomplete object
+		autocomplete.bindTo('bounds', map);
+
+		// Set up a marker to indicate the searched location
+		var marker = new google.maps.Marker({
+			map: map,
+			draggable: true
+		});
+
+		// Event listener for place selection
+		autocomplete.addListener('place_changed', function() {
+		var place = autocomplete.getPlace();
+		if (!place.geometry) {
+			window.alert("No details available for input: '" + place.name + "'");
+			return;
+		}
+
+		// Update map viewport
+		if (place.geometry.viewport) {
+			map.fitBounds(place.geometry.viewport);
+		} else {
+			map.setCenter(place.geometry.location);
+			map.setZoom(17);
+		}
+
+		// Remove the temporary marker
+		marker.setMap(null);
+
+		// Create a location object
+		var locationObject = {
+			lat: place.geometry.location.lat(),
+			lng: place.geometry.location.lng(),
+			type: "marker",
+		};
+
+		// Add the location to your locations array
+		if (mapMoreInstance.settings.single) {
+			mapMoreInstance.locations = [locationObject];
+			mapMoreInstance.clearLocations();
+		} else {
+			mapMoreInstance.locations.push(locationObject);
+		}
+
+		// Set the locations on the map
+		mapMoreInstance.setLocations();
+
+		// Store the locations back to the input field
+		mapMoreInstance.storeLocations();
+		});
+
+
+		// Initialize the mapMore plugin
+		$('#<?php echo $map_id; ?>').mapMore({
+			map: map,
+			fieldname: '<?php echo $field_name; ?>',
+			locations: locations,
+			draggable: true,
+			single: false,
+			editable: true,
+			drawingManager: true,
+			// Include other necessary settings here
+		});
+
+		});
 		</script>
+
+		<div class="acf-field-mapmore-row">
+			<input id="pac-input-<?php echo $map_id; ?>" class="mapmore-search-box" type="text" placeholder="Search for a location">
+		</div>
 		<div class="acf-field-mapmore-row">
 			<div class="acf-field-mapmore-content">
 				<div id="<?= $map_id ?>" style="height: <?= ($field['height'] ?: $this->default_values['height'] ) ?>px;"></div>
