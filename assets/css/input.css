@@ -86,3 +86,28 @@
     display: block;
     margin-bottom: 0;
 }
+
+.gm-control-active, .gmnoprint, .gm-style-mtc {
+	display: block !important;
+	visibility: visible !important;
+	opacity: 1 !important;
+  }
+
+  .map-container {
+	width: 100%;
+	height: 500px; /* Adjust as needed */
+  }
+
+  .mapmore-search-box {
+	box-sizing: border-box;
+	border: 1px solid transparent;
+	width: 100%;
+	height: 40px;
+	margin-bottom: 10px !important;
+	padding: 0 12px;
+	border-radius: 3px;
+	font-size: 16px;
+	outline: none;
+	text-overflow: ellipsis;
+  }
+  
