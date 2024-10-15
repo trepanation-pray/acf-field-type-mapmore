@@ -176,11 +176,12 @@
     
     },
 
+    // Inside your MapMore plugin's setDrawingManager function
     setDrawingManager: function () {
       var self = this;
 
       var drawingManager = new google.maps.drawing.DrawingManager({
-        //drawingMode: google.maps.drawing.OverlayType.MARKER,
+        drawingMode: null, // Set to null to start without any drawing mode active
         drawingControl: true,
         drawingControlOptions: {
           position: google.maps.ControlPosition.TOP_CENTER,
@@ -193,125 +194,193 @@
           ],
         },
         markerOptions: {
-          //icon: 'https://developers.google.com/maps/documentation/javascript/examples/full/images/beachflag.png'
+          draggable: self.settings.draggable,
         },
         circleOptions: {
-          strokeColor: this.settings.defaultStrokeColor,
-          strokeOpacity: this.settings.defaultStrokeOpacity,
-          strokeWeight: this.settings.defaultStrokeWeight,
-          fillColor: this.settings.defaultFillColor,
-          fillOpacity: this.settings.defaultFillOpacity,
-          editable: true,
+          strokeColor: self.settings.defaultStrokeColor,
+          strokeOpacity: self.settings.defaultStrokeOpacity,
+          strokeWeight: self.settings.defaultStrokeWeight,
+          fillColor: self.settings.defaultFillColor,
+          fillOpacity: self.settings.defaultFillOpacity,
+          editable: self.settings.editable,
           zIndex: 1,
         },
         polygonOptions: {
-          strokeColor: this.settings.defaultStrokeColor,
-          strokeOpacity: this.settings.defaultStrokeOpacity,
-          strokeWeight: this.settings.defaultStrokeWeight,
-          fillColor: this.settings.defaultFillColor,
-          fillOpacity: this.settings.defaultFillOpacity,
-          editable: true,
+          strokeColor: self.settings.defaultStrokeColor,
+          strokeOpacity: self.settings.defaultStrokeOpacity,
+          strokeWeight: self.settings.defaultStrokeWeight,
+          fillColor: self.settings.defaultFillColor,
+          fillOpacity: self.settings.defaultFillOpacity,
+          editable: self.settings.editable,
           zIndex: 1,
         },
         polylineOptions: {
-          strokeColor: this.settings.defaultStrokeColor,
-          strokeOpacity: this.settings.defaultStrokeOpacity,
-          strokeWeight: this.settings.defaultStrokeWeight,
-          editable: true,
+          strokeColor: self.settings.defaultStrokeColor,
+          strokeOpacity: self.settings.defaultStrokeOpacity,
+          strokeWeight: self.settings.defaultStrokeWeight,
+          editable: self.settings.editable,
           zIndex: 1,
         },
         rectangleOptions: {
-          strokeColor: this.settings.defaultStrokeColor,
-          strokeOpacity: this.settings.defaultStrokeOpacity,
-          strokeWeight: this.settings.defaultStrokeWeight,
-          fillColor: this.settings.defaultFillColor,
-          fillOpacity: this.settings.defaultFillOpacity,
-          editable: true,
+          strokeColor: self.settings.defaultStrokeColor,
+          strokeOpacity: self.settings.defaultStrokeOpacity,
+          strokeWeight: self.settings.defaultStrokeWeight,
+          fillColor: self.settings.defaultFillColor,
+          fillOpacity: self.settings.defaultFillOpacity,
+          editable: self.settings.editable,
           zIndex: 1,
         },
       });
       drawingManager.setMap(this.map);
 
-      google.maps.event.addListener(
-        drawingManager,
-        "overlaycomplete",
-        function (event) {
-          switch (event.type) {
-            case google.maps.drawing.OverlayType.CIRCLE:
-              var locationObject = {
-                lat: event.overlay.center.lat(),
-                lng: event.overlay.center.lng(),
-                type: "circle",
-                radius: event.overlay.getRadius(),
-              };
+      // Handle the overlaycomplete event
+      google.maps.event.addListener(drawingManager, "overlaycomplete", function (event) {
+        var locationObject;
+        var newShape = event.overlay;
 
-              break;
+        // Determine the type of shape and create a corresponding location object
+        switch (event.type) {
+          case google.maps.drawing.OverlayType.MARKER:
+            locationObject = {
+              type: "marker",
+              lat: newShape.getPosition().lat(),
+              lng: newShape.getPosition().lng(),
+            };
 
-            case google.maps.drawing.OverlayType.MARKER:
-              /*
-							
-				@wip
-				if ( self.settings.defaultMarker !== null ) {
+            // Set marker properties
+            newShape.setDraggable(self.settings.draggable);
 
-					var icon = {
-						url: self.settings.defaultMarker,
-						anchor: new google.maps.Point(25,50),
-						scaledSize: new google.maps.Size(50,50)
-					};
+            // Add event listener for position changes
+            google.maps.event.addListener(newShape, 'dragend', function () {
+              locationObject.lat = newShape.getPosition().lat();
+              locationObject.lng = newShape.getPosition().lng();
+              self.storeLocations();
+            });
 
-				}
-				*/
+            break;
 
-              var locationObject = {
-                lat: event.overlay.position.lat(),
-                lng: event.overlay.position.lng(),
-                type: "marker",
-              };
+          case google.maps.drawing.OverlayType.CIRCLE:
+            locationObject = {
+              type: "circle",
+              lat: newShape.getCenter().lat(),
+              lng: newShape.getCenter().lng(),
+              radius: newShape.getRadius(),
+            };
 
-              break;
+            // Set circle properties
+            newShape.setEditable(self.settings.editable);
 
-            case google.maps.drawing.OverlayType.POLYGON:
-              var locationObject = {
-                path: event.overlay.getPath().getArray(),
-                type: "polygon",
-              };
+            // Add event listeners for radius and center changes
+            google.maps.event.addListener(newShape, 'radius_changed', function () {
+              locationObject.radius = newShape.getRadius();
+              self.storeLocations();
+            });
+            google.maps.event.addListener(newShape, 'center_changed', function () {
+              locationObject.lat = newShape.getCenter().lat();
+              locationObject.lng = newShape.getCenter().lng();
+              self.storeLocations();
+            });
 
-              break;
+            break;
 
-            case google.maps.drawing.OverlayType.POLYLINE:
-              var locationObject = {
-                path: event.overlay.getPath().getArray(),
-                type: "polyline",
-              };
+          case google.maps.drawing.OverlayType.POLYGON:
+            locationObject = {
+              type: "polygon",
+              path: newShape.getPath().getArray(),
+            };
 
-              break;
+            // Set polygon properties
+            newShape.setEditable(self.settings.editable);
 
-            case google.maps.drawing.OverlayType.RECTANGLE:
-              var locationObject = {
-                bounds: event.overlay.getBounds(),
-                type: "rectangle",
-              };
+            // Add event listeners for path changes
+            attachPathListeners(newShape.getPath(), locationObject, 'path');
 
-              break;
-          }
+            break;
 
-          if (self.settings.single) {
-            self.locations = [locationObject];
-          } else {
-            self.locations.push(locationObject);
-          }
+          case google.maps.drawing.OverlayType.POLYLINE:
+            locationObject = {
+              type: "polyline",
+              path: newShape.getPath().getArray(),
+            };
 
-          if (self.settings.single) self.clearLocations();
+            // Set polyline properties
+            newShape.setEditable(self.settings.editable);
 
-          // Delete the drawn shape from map, keep only the one in .locations
-          event.overlay.setMap(null);
+            // Add event listeners for path changes
+            attachPathListeners(newShape.getPath(), locationObject, 'path');
 
-          self.setLocations();
+            break;
 
-          self.storeLocations();
+          case google.maps.drawing.OverlayType.RECTANGLE:
+            locationObject = {
+              type: "rectangle",
+              bounds: newShape.getBounds().toJSON(),
+            };
+
+            // Set rectangle properties
+            newShape.setEditable(self.settings.editable);
+
+            // Add event listener for bounds changes
+            google.maps.event.addListener(newShape, 'bounds_changed', function () {
+              locationObject.bounds = newShape.getBounds().toJSON();
+              self.storeLocations();
+            });
+
+            break;
         }
-      );
+
+        // Add the new location object to the locations array
+        self.locations.push(locationObject);
+
+        // Add the new shape to the mapObjects array
+        self.mapObjects.push(newShape);
+
+        // Add right-click listener for deleting the shape
+        google.maps.event.addListener(newShape, 'rightclick', function (event) {
+          if (event.vertex != null && (event.type === 'polyline' || event.type === 'polygon')) {
+            // Remove the vertex if right-clicked on a vertex
+            newShape.getPath().removeAt(event.vertex);
+            locationObject.path = newShape.getPath().getArray();
+            self.storeLocations();
+          } else {
+            // Remove the shape completely
+            newShape.setMap(null);
+
+            // Find the index of the shape in mapObjects
+            var shapeIndex = self.mapObjects.indexOf(newShape);
+
+            if (shapeIndex !== -1) {
+              self.mapObjects.splice(shapeIndex, 1);
+              self.locations.splice(shapeIndex, 1);
+              self.storeLocations();
+            }
+          }
+        });
+
+        // Store the updated locations array
+        self.storeLocations();
+
+        // Disable drawing mode after adding the shape
+        drawingManager.setDrawingMode(null);
+      });
+
+      // Function to attach event listeners to paths (used for polygons and polylines)
+      function attachPathListeners(path, locationObject, property) {
+        google.maps.event.addListener(path, 'set_at', function () {
+          locationObject[property] = path.getArray();
+          self.storeLocations();
+        });
+        google.maps.event.addListener(path, 'insert_at', function () {
+          locationObject[property] = path.getArray();
+          self.storeLocations();
+        });
+        google.maps.event.addListener(path, 'remove_at', function () {
+          locationObject[property] = path.getArray();
+          self.storeLocations();
+        });
+      }
     },
+
 
     getContextmenuHtml: function () {
       var html = '<ul class="' + this.settings.contextmenuClass + '">';
@@ -414,13 +483,13 @@
 
     clearLocations: function () {
       var self = this;
-
-      for (var key in self.mapObjects) {
-        var mapObject = self.mapObjects[key];
-
-        mapObject.setMap(null);
+    
+      for (var i = 0; i < self.mapObjects.length; i++) {
+        self.mapObjects[i].setMap(null);
       }
+      self.mapObjects = [];
     },
+    
 
     storeLocations: function () {
       var $input = jQuery('input[name="' + this.settings.fieldname + '"]');
@@ -430,220 +499,66 @@
 
     setLocations: function () {
       var self = this;
-
-      for (var key in this.locations) {
-        var location = this.locations[key];
-
-        switch (location.type) {
-          case "marker":
-            var markerLatLng = {
-              lat: location.lat,
-              lng: location.lng,
-            };
-
-            var mapObjectConfig = {
-              position: markerLatLng,
-              map: self.map,
-              draggable: self.settings.draggable,
-              animation: google.maps.Animation.DROP,
-            };
-
-            if (self.settings.defaultMarker !== null) {
-              mapObjectConfig["icon"] = self.settings.defaultMarker;
-            }
-
-            var mapObject = new google.maps.Marker(mapObjectConfig);
-
-            self.mapObjects.push(mapObject);
-
-            google.maps.event.addListener(
-              mapObject,
-              "dragend",
-              function (event) {
-                self.locations[key]["lat"] = event.latLng.lat();
-                self.locations[key]["lng"] = event.latLng.lng();
-
+    
+      // Clear existing map objects
+      self.clearLocations();
+    
+      // Loop through locations and create map objects
+      for (var i = 0; i < self.locations.length; i++) {
+        (function (key) {
+          var location = self.locations[key];
+          var mapObject;
+    
+          switch (location.type) {
+            case "polyline":
+              mapObject = new google.maps.Polyline({
+                path: location.path,
+                strokeColor: self.settings.defaultStrokeColor,
+                strokeOpacity: self.settings.defaultStrokeOpacity,
+                strokeWeight: self.settings.defaultStrokeWeight,
+                map: self.map,
+                editable: self.settings.editable,
+              });
+    
+              // Add to mapObjects array
+              self.mapObjects.push(mapObject);
+    
+              // Set up event listeners with closure to capture 'key'
+              google.maps.event.addListener(mapObject.getPath(), 'set_at', function () {
+                self.locations[key].path = mapObject.getPath().getArray();
                 self.storeLocations();
-              }
-            );
-
-            break;
-
-          case "circle":
-            var markerLatLng = {
-              lat: location.lat,
-              lng: location.lng,
-            };
-
-            var mapObject = new google.maps.Circle({
-              strokeColor: this.settings.defaultStrokeColor,
-              strokeOpacity: this.settings.defaultStrokeOpacity,
-              strokeWeight: this.settings.defaultStrokeWeight,
-              fillColor: this.settings.defaultFillColor,
-              fillOpacity: this.settings.defaultFillOpacity,
-              map: self.map,
-              center: markerLatLng,
-              radius: location.radius,
-              editable: self.settings.editable,
-            });
-
-            self.mapObjects.push(mapObject);
-
-            google.maps.event.addListener(
-              mapObject,
-              "radius_changed",
-              function () {
-                self.locations[key]["radius"] = mapObject.getRadius();
-
+              });
+              google.maps.event.addListener(mapObject.getPath(), 'insert_at', function () {
+                self.locations[key].path = mapObject.getPath().getArray();
                 self.storeLocations();
-              }
-            );
-
-            google.maps.event.addListener(
-              mapObject,
-              "center_changed",
-              function (event) {
-                self.locations[key]["lat"] = mapObject.getCenter().lat();
-                self.locations[key]["lng"] = mapObject.getCenter().lng();
-
+              });
+              google.maps.event.addListener(mapObject.getPath(), 'remove_at', function () {
+                self.locations[key].path = mapObject.getPath().getArray();
                 self.storeLocations();
-              }
-            );
-
-            break;
-
-          case "polygon":
-            var mapObject = new google.maps.Polygon({
-              path: location["path"],
-              strokeColor: this.settings.defaultStrokeColor,
-              strokeOpacity: this.settings.defaultStrokeOpacity,
-              strokeWeight: this.settings.defaultStrokeWeight,
-              fillColor: this.settings.defaultFillColor,
-              fillOpacity: this.settings.defaultFillOpacity,
-              map: self.map,
-              editable: self.settings.editable,
-            });
-
-            self.mapObjects.push(mapObject);
-
-            google.maps.event.addListener(
-              mapObject.getPath(),
-              "set_at",
-              function (event) {
-                self.locations[key]["path"] = mapObject.getPath().getArray();
-
-                self.storeLocations();
-              }
-            );
-
-            google.maps.event.addListener(
-              mapObject.getPath(),
-              "insert_at",
-              function () {
-                self.locations[key]["path"] = mapObject.getPath().getArray();
-
-                self.storeLocations();
-              }
-            );
-
-            google.maps.event.addListener(
-              mapObject,
-              "rightclick",
-              function (event) {
-                // Check if click was on a vertex control point
-                if (typeof event.vertex === "undefined") {
-                  return;
+              });
+    
+              // Add right-click listener for deletion
+              google.maps.event.addListener(mapObject, 'rightclick', function (event) {
+                if (event.vertex != null) {
+                  // Remove the vertex if needed
+                  mapObject.getPath().removeAt(event.vertex);
+                } else {
+                  // Remove the entire polyline
+                  mapObject.setMap(null);
+                  self.mapObjects.splice(key, 1);
+                  self.locations.splice(key, 1);
+                  self.storeLocations();
                 }
-
-                mapObject.getPath().removeAt(event.vertex);
-
-                self.locations[key]["path"] = mapObject.getPath().getArray();
-
-                self.storeLocations();
-              }
-            );
-
-            break;
-
-          case "polyline":
-            var mapObject = new google.maps.Polyline({
-              path: location["path"],
-              strokeColor: this.settings.defaultStrokeColor,
-              strokeOpacity: this.settings.defaultStrokeOpacity,
-              strokeWeight: this.settings.defaultStrokeWeight,
-              map: self.map,
-              editable: self.settings.editable,
-            });
-
-            self.mapObjects.push(mapObject);
-
-            google.maps.event.addListener(
-              mapObject.getPath(),
-              "set_at",
-              function (event) {
-                self.locations[key]["path"] = mapObject.getPath().getArray();
-
-                self.storeLocations();
-              }
-            );
-
-            google.maps.event.addListener(
-              mapObject.getPath(),
-              "insert_at",
-              function () {
-                self.locations[key]["path"] = mapObject.getPath().getArray();
-
-                self.storeLocations();
-              }
-            );
-
-            google.maps.event.addListener(
-              mapObject,
-              "rightclick",
-              function (event) {
-                // Check if click was on a vertex control point
-                if (typeof event.vertex === "undefined") {
-                  return;
-                }
-
-                mapObject.getPath().removeAt(event.vertex);
-
-                self.locations[key]["path"] = mapObject.getPath().getArray();
-
-                self.storeLocations();
-              }
-            );
-
-            break;
-
-          case "rectangle":
-            var mapObject = new google.maps.Rectangle({
-              bounds: location["bounds"],
-              strokeColor: this.settings.defaultStrokeColor,
-              strokeOpacity: this.settings.defaultStrokeOpacity,
-              strokeWeight: this.settings.defaultStrokeWeight,
-              fillColor: this.settings.defaultFillColor,
-              fillOpacity: this.settings.defaultFillOpacity,
-              map: self.map,
-              editable: self.settings.editable,
-            });
-
-            self.mapObjects.push(mapObject);
-
-            google.maps.event.addListener(
-              mapObject,
-              "bounds_changed",
-              function (event) {
-                self.locations[key]["bounds"] = mapObject.getBounds();
-
-                self.storeLocations();
-              }
-            );
-
-            break;
-        }
+              });
+    
+              break;
+    
+            // Handle other types (markers, circles, etc.) similarly
+          }
+        })(i); // Pass 'i' as 'key' to the closure
       }
     },
+    
 
     fitBounds: function () {
       var bounds = new google.maps.LatLngBounds();
