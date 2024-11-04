@@ -446,11 +446,12 @@
           type: "marker",
         };
 
-      if (this.settings.single) {
-        this.locations = [locationObject];
-      } else {
-        this.locations.push(locationObject);
-      }
+        if (this.settings.single) {
+          this.locations = [locationObject];
+          this.clearLocations();
+        } else {
+          this.locations.push(locationObject);
+        }
 
       if (this.settings.single) this.clearLocations();
 
@@ -493,7 +494,6 @@
 
     storeLocations: function () {
       var $input = jQuery('input[name="' + this.settings.fieldname + '"]');
-
       $input.val(JSON.stringify(this.locations));
     },
 
@@ -510,6 +510,21 @@
           var mapObject;
     
           switch (location.type) {
+            case "marker":
+              mapObject = new google.maps.Marker({
+                position: { lat: location.lat, lng: location.lng },
+                map: self.map,
+                draggable: self.settings.draggable
+              });
+    
+              // Add event listener for marker drag
+              google.maps.event.addListener(mapObject, 'dragend', function () {
+                location.lat = mapObject.getPosition().lat();
+                location.lng = mapObject.getPosition().lng();
+                self.storeLocations();
+              });
+              break;
+    
             case "polyline":
               mapObject = new google.maps.Polyline({
                 path: location.path,
@@ -517,13 +532,10 @@
                 strokeOpacity: self.settings.defaultStrokeOpacity,
                 strokeWeight: self.settings.defaultStrokeWeight,
                 map: self.map,
-                editable: self.settings.editable,
+                editable: self.settings.editable
               });
     
-              // Add to mapObjects array
-              self.mapObjects.push(mapObject);
-    
-              // Set up event listeners with closure to capture 'key'
+              // Add event listeners for path changes
               google.maps.event.addListener(mapObject.getPath(), 'set_at', function () {
                 self.locations[key].path = mapObject.getPath().getArray();
                 self.storeLocations();
@@ -536,28 +548,101 @@
                 self.locations[key].path = mapObject.getPath().getArray();
                 self.storeLocations();
               });
-    
-              // Add right-click listener for deletion
-              google.maps.event.addListener(mapObject, 'rightclick', function (event) {
-                if (event.vertex != null) {
-                  // Remove the vertex if needed
-                  mapObject.getPath().removeAt(event.vertex);
-                } else {
-                  // Remove the entire polyline
-                  mapObject.setMap(null);
-                  self.mapObjects.splice(key, 1);
-                  self.locations.splice(key, 1);
-                  self.storeLocations();
-                }
-              });
-    
               break;
     
-            // Handle other types (markers, circles, etc.) similarly
+            case "circle":
+              mapObject = new google.maps.Circle({
+                center: { lat: location.lat, lng: location.lng },
+                radius: location.radius,
+                strokeColor: self.settings.defaultStrokeColor,
+                strokeOpacity: self.settings.defaultStrokeOpacity,
+                strokeWeight: self.settings.defaultStrokeWeight,
+                fillColor: self.settings.defaultFillColor,
+                fillOpacity: self.settings.defaultFillOpacity,
+                map: self.map,
+                editable: self.settings.editable
+              });
+    
+              // Add event listeners for radius and center changes
+              google.maps.event.addListener(mapObject, 'radius_changed', function () {
+                self.locations[key].radius = mapObject.getRadius();
+                self.storeLocations();
+              });
+              google.maps.event.addListener(mapObject, 'center_changed', function () {
+                self.locations[key].lat = mapObject.getCenter().lat();
+                self.locations[key].lng = mapObject.getCenter().lng();
+                self.storeLocations();
+              });
+              break;
+    
+            case "polygon":
+              mapObject = new google.maps.Polygon({
+                paths: location.path,
+                strokeColor: self.settings.defaultStrokeColor,
+                strokeOpacity: self.settings.defaultStrokeOpacity,
+                strokeWeight: self.settings.defaultStrokeWeight,
+                fillColor: self.settings.defaultFillColor,
+                fillOpacity: self.settings.defaultFillOpacity,
+                map: self.map,
+                editable: self.settings.editable
+              });
+    
+              // Add event listeners for path changes
+              google.maps.event.addListener(mapObject.getPath(), 'set_at', function () {
+                self.locations[key].path = mapObject.getPath().getArray();
+                self.storeLocations();
+              });
+              google.maps.event.addListener(mapObject.getPath(), 'insert_at', function () {
+                self.locations[key].path = mapObject.getPath().getArray();
+                self.storeLocations();
+              });
+              google.maps.event.addListener(mapObject.getPath(), 'remove_at', function () {
+                self.locations[key].path = mapObject.getPath().getArray();
+                self.storeLocations();
+              });
+              break;
+    
+            case "rectangle":
+              mapObject = new google.maps.Rectangle({
+                bounds: location.bounds,
+                strokeColor: self.settings.defaultStrokeColor,
+                strokeOpacity: self.settings.defaultStrokeOpacity,
+                strokeWeight: self.settings.defaultStrokeWeight,
+                fillColor: self.settings.defaultFillColor,
+                fillOpacity: self.settings.defaultFillOpacity,
+                map: self.map,
+                editable: self.settings.editable
+              });
+    
+              // Add event listener for bounds changes
+              google.maps.event.addListener(mapObject, 'bounds_changed', function () {
+                self.locations[key].bounds = mapObject.getBounds().toJSON();
+                self.storeLocations();
+              });
+              break;
+    
+            default:
+              console.warn('Unknown location type:', location.type);
+              return;
           }
-        })(i); // Pass 'i' as 'key' to the closure
+    
+          // Add map object to mapObjects array for further reference
+          self.mapObjects.push(mapObject);
+    
+          // Add right-click listener for deletion (for markers)
+          if (location.type === "marker") {
+            google.maps.event.addListener(mapObject, 'rightclick', function () {
+              mapObject.setMap(null);
+              self.mapObjects.splice(key, 1);
+              self.locations.splice(key, 1);
+              self.storeLocations();
+            });
+          }
+    
+        })(i);
       }
-    },
+    }
+    ,    
     
 
     fitBounds: function () {
